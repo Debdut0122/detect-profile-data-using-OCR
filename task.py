@@ -11,17 +11,20 @@ logging.getLogger("ppocr").setLevel(logging.INFO)
 from PIL import Image
 from PIL import ImageFont
 
+# we need to convert the pdf to the image to feed the model
 images = convert_from_path("Sample Problem.pdf")
-
+# make folder to save the pages as image from the PDF for the input to the model
 image_folder = 'images'
 os.makedirs(image_folder, exist_ok=True)
-result_images = 'result_images'
-os.makedirs(result_images, exist_ok=True)
 
 for i, image in enumerate(images):
     image.save(os.path.join(image_folder, 'page'+ str(i) +'.jpg'), 'JPEG')
 
-
+""" 
+    A function that reads the image, detect the contours using openCV library.
+    Once we detect the countours, we check if it is rectangle, if it is, then we sort them and store the
+    coordinates of the rectangles and return the coordinates.
+"""
 def func(path):
   image = cv2.imread(path)
   gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
@@ -43,31 +46,36 @@ def func(path):
       cropped_images.append(cropped_image)
   return cropped_images
 
-
+# getting coordinates of the boxes to crop them, so that we can detect the text in it
 all_images = []
 image_files = [f for f in os.listdir(image_folder) if f.endswith('.jpg')]
 for image_path in image_files:
     all_images.append(func(os.path.join("images",image_path)))
+# creating to folder to annotate the image and save it
+result_images = 'result_images'
+os.makedirs(result_images, exist_ok=True)
 
-
+# we are using pretrained paddleOCR model to predict the model
 ocr = PaddleOCR(use_angle_cls=True, lang='en')
 
 messages = []
 font_path = '/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf'
 for cropped_images in all_images:
     for i in range(len(cropped_images)):
+        # getting the text from the model
         result = ocr.ocr(cropped_images[i], cls=True)
-
         image = Image.fromarray(cropped_images[i])
         boxes = [line[0] for line in result[0]]
         txts = [line[1][0] for line in result[0]]
         scores = [line[1][1] for line in result[0]]
-
+        # annotating the image with the OCR text detected
         im_show = draw_ocr(image, boxes, txts, scores, font_path=font_path)  
         im_show = Image.fromarray(im_show)
         im_show.save(os.path.join(result_images,'result' + str(i) + '.jpg'))
+        # storing the texts only as we need texts only
         messages.append(txts)
 
+# note that the "Deleted" watermarked images contain a character E at the place of serial number, so drop them
 profiles = []
 for message in messages:
     x = True
@@ -78,14 +86,30 @@ for message in messages:
     if x:
         profiles.append([item.upper() for item in message])
 
-
+# We dont need the information of "Photo Available", so remove the redundancy
 for profile in profiles:
     if 'PHOTO' in profile:
         profile.remove('PHOTO')
     if 'AVAILABLE' in profile:
         profile.remove('AVAILABLE')
 
+"""
+    this class will store all the essential information corresponding to a profile.
+    Necessary informations are:
+        1. Age
+        2. Gender
+        3. Address
+        4. Name
+        5. Relative's Name
+        6. Relation type
+        7. Serial Number 
+        8. Eipc Number
+    The functions do the tasks as specified. 
 
+    Note that PaddleOCR model returns the text from top to bottom, left to right order, hence, serial number 
+    and epic numbers are the first two values in the array.
+
+"""
 class Profile:
     def __init__(self, profile_data):
         self.profile_data = profile_data
@@ -105,6 +129,14 @@ class Profile:
         self.extract_sl_no_and_epic_no()
 
     def extract_gender_and_age(self):
+        """
+            Updates the Age and Gender to appropriate values.
+
+            check if any string that contains AGE followed by any characters including space.
+            then check if there is any digits, if yes store it and it will be the age.
+
+            Similary, if Gender is mentioned we just need to check if there exist Female or male.
+        """
         for item in self.profile_data:
             pattern = r'AGE.+'
             if re.search(pattern, item, flags=re.IGNORECASE):
@@ -122,6 +154,14 @@ class Profile:
                 self.gender = 'M' if gender=="MALE" else 'F'
 
     def extract_house_number(self):
+        """
+            Updates the Address to appropriate value.
+
+            We need to check if any string contains HOUSE and NUMBER, the texts following that should
+            be the address.
+
+            Note, spaces characters in the beginning of the adresses are removed.
+        """
         for item in self.profile_data:
             item = re.sub(r'^[^\w]+', '', item)
             match = re.search(r'HOUSE\s*[^a-zA-Z0-9]*NUMBER\s*[^a-zA-Z0-9]*([\w\s-]*)', item, re.IGNORECASE)
@@ -129,6 +169,9 @@ class Profile:
                 self.address = re.sub(r'^\W+|\W+$', '', match.group(1))
 
     def extract_relation_info(self):
+        """
+            updates Name, and relatives name and relation type using regex
+        """
         name_pattern = r'NAME\W*(.*)'
         father_name_pattern = r"FATHER'?S?\W*NAME\W*(.*)"
         husband_name_pattern = r"HUSBAND'?S?\W*NAME\W*(.*)"
@@ -168,14 +211,11 @@ class Profile:
         }
 
 
-# Example Usage:
 
 
 profile_objects = [Profile(data) for data in profiles]
 
 
-
-# Create a list of dictionaries to hold the data in the desired format
 data = []
 
 for profile in profile_objects:

@@ -1,0 +1,6 @@
+pandas
+opencv-python
+pdf2image
+paddlepaddle
+paddleocr
+Pillow
