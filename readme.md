@@ -12,7 +12,7 @@ To set up the environment and install the required libraries, follow these steps
 
 1. Clone the repository:
 
-
+    ```
     git clone https://github.com/Debdut0122/detect-profile-data-using-OCR.git
 
 
