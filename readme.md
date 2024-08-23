@@ -15,18 +15,15 @@ To set up the environment and install the required libraries, follow these steps
     ```
     git clone https://github.com/Debdut0122/detect-profile-data-using-OCR.git
 
-
 2. Navigate to the project directory:
 
-
+```
     cd detect-profile-data-using-OCR
-
 
 3. Install the necessary Python packages using pip:
 
-
+```
     pip install pandas re pdf2image opencv-python paddlepaddle paddleocr pillow
-
 
 Alternatively, you can install all the libraries from the requirements.txt file if provided:
 
