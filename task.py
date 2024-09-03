@@ -80,7 +80,7 @@ profiles = []
 for message in messages:
     x = True
     for info in message:
-        if 'E' == info:
+        if 'E' == info or 'S'==info:
             x = False
             break
     if x:
