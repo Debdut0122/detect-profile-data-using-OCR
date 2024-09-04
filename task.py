@@ -1,5 +1,6 @@
 import pandas as pd
 import re
+import numpy as np
 from pdf2image import convert_from_path
 import cv2
 from paddleocr import PaddleOCR, draw_ocr
@@ -8,7 +9,7 @@ import os
 warnings.filterwarnings("ignore")
 import logging
 logging.getLogger("ppocr").setLevel(logging.INFO)
-from PIL import Image
+from PIL import Image, ImageEnhance
 from PIL import ImageFont
 
 # we need to convert the pdf to the image to feed the model
@@ -37,44 +38,83 @@ def func(path):
           rectangles.append(approx)
   rectangles.sort(key=lambda x: cv2.contourArea(x), reverse=True)
   cropped_images = []
+  cropped_images2 = []
   for rect in rectangles:
     if cv2.contourArea(rect) < rectangles[1][0][0][0]:
       break
     else:
       x, y, w, h = cv2.boundingRect(rect)
-      cropped_image = image[y:y+h, x:x+w]
-      cropped_images.append(cropped_image)
-  return cropped_images
+      w_=w*7
+      w_//=10
+      cropped_image = image[y:y+h, x:x+w_]
+      cropped_image2 = image[y:y+h,x+w_:x+w]
+      pil_image = Image.fromarray(cropped_image)
+      enhancer = ImageEnhance.Sharpness(pil_image)
+      enhanced_image = enhancer.enhance(2.5)
+      cropped_images.append(np.array(enhanced_image))
+      cropped_images2.append(cropped_image2)
+  return cropped_images, cropped_images2
 
 # getting coordinates of the boxes to crop them, so that we can detect the text in it
-all_images = []
+all_images1 = []
+all_images2 = []
 image_files = [f for f in os.listdir(image_folder) if f.endswith('.jpg')]
 for image_path in image_files:
-    all_images.append(func(os.path.join("images",image_path)))
+    c1, c2 = func(os.path.join("images",image_path))
+    all_images1.append(c1)
+    all_images2.append(c2)
+
 # creating to folder to annotate the image and save it
 result_images = 'result_images'
 os.makedirs(result_images, exist_ok=True)
 
 # we are using pretrained paddleOCR model to predict the model
 ocr = PaddleOCR(use_angle_cls=True, lang='en')
-
 messages = []
+cnt = 0
 font_path = '/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf'
-for cropped_images in all_images:
+for cropped_images in all_images2:
     for i in range(len(cropped_images)):
         # getting the text from the model
         result = ocr.ocr(cropped_images[i], cls=True)
-        image = Image.fromarray(cropped_images[i])
-        boxes = [line[0] for line in result[0]]
-        txts = [line[1][0] for line in result[0]]
-        scores = [line[1][1] for line in result[0]]
-        # annotating the image with the OCR text detected
-        im_show = draw_ocr(image, boxes, txts, scores, font_path=font_path)  
-        im_show = Image.fromarray(im_show)
-        im_show.save(os.path.join(result_images,'result' + str(i) + '.jpg'))
-        # storing the texts only as we need texts only
-        messages.append(txts)
+        if result[0]is None:
+            continue
+        else:
+            image = Image.fromarray(cropped_images[i])
+            boxes = [line[0] for line in result[0]]
+            txts = [line[1][0] for line in result[0]]
+            scores = [line[1][1] for line in result[0]]
+            # annotating the image with the OCR text detected
+            im_show = draw_ocr(image, boxes, txts, scores, font_path=font_path)  
+            im_show = Image.fromarray(im_show)
+            im_show.save(os.path.join(result_images,'result' + str(cnt) + '.jpg'))
+            cnt+=1
+            # storing the texts only as we need texts only
+            messages.append(txts)
 
+messages_new = []
+for i in messages:
+    messages_new.append([i[0]])
+
+cntr = 0
+for cropped_images in all_images1:
+    for i in range(len(cropped_images)):
+        # getting the text from the model
+        result = ocr.ocr(cropped_images[i], cls=True)
+        if result[0] is not None:
+            image = Image.fromarray(cropped_images[i])
+            boxes = [line[0] for line in result[0]]
+            txts = [line[1][0] for line in result[0]]
+            scores = [line[1][1] for line in result[0]]
+            # annotating the image with the OCR text detected
+            im_show = draw_ocr(image, boxes, txts, scores, font_path=font_path)  
+            im_show = Image.fromarray(im_show)
+            im_show.save(os.path.join(result_images,'result' + str(cnt) + '.jpg'))
+            # storing the texts only as we need texts only
+            cnt+=1
+            messages_new[cntr]+=txts
+            cntr+=1
+messages=messages_new
 # note that the "Deleted" watermarked images contain a character E at the place of serial number, so drop them
 profiles = []
 for message in messages:
@@ -87,11 +127,6 @@ for message in messages:
         profiles.append([item.upper() for item in message])
 
 # We dont need the information of "Photo Available", so remove the redundancy
-for profile in profiles:
-    if 'PHOTO' in profile:
-        profile.remove('PHOTO')
-    if 'AVAILABLE' in profile:
-        profile.remove('AVAILABLE')
 
 """
     this class will store all the essential information corresponding to a profile.
@@ -112,6 +147,7 @@ for profile in profiles:
 """
 class Profile:
     def __init__(self, profile_data):
+        # print(profile_data)
         self.profile_data = profile_data
         self.age = None
         self.gender = None
@@ -173,8 +209,9 @@ class Profile:
             updates Name, and relatives name and relation type using regex
         """
         name_pattern = r'NAME\W*(.*)'
-        father_name_pattern = r"FATHER'?S?\W*NAME\W*(.*)"
-        husband_name_pattern = r"HUSBAND'?S?\W*NAME\W*(.*)"
+        # father_name_pattern = r"FATHER'?S?\W*NAME\W*(.*)"
+        father_name_pattern = r"F.*NAME\W*(.*)"
+        husband_name_pattern = r"H.*NAME\W*(.*)"
         others_pattern = r"OTHERS\W*(.*)"
 
         for item in self.profile_data:
@@ -195,8 +232,8 @@ class Profile:
 
     def extract_sl_no_and_epic_no(self):
         if len(self.profile_data) >= 2:
-            self.sl_no = self.profile_data[0]
-            self.epic_no = self.profile_data[1]
+            self.sl_no = self.profile_data[1]
+            self.epic_no = self.profile_data[0]
 
     def get_profile_info(self):
         return {
