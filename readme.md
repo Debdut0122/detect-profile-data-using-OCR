@@ -52,7 +52,7 @@ To set up the environment and install the required libraries, follow these steps
 2. Run the script:
 
     ```bash
-    python3 task.py
+    python3 app.py
     ```
 
 The script will process the images or PDFs and output the extracted text.

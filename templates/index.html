@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+
+{% block head %}
+<style>
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background-color: #f8f9fa;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    margin: 0;
+}
+.container {
+    background-color: #ffffff;
+    padding: 30px;
+    border-radius: 10px;
+    box-shadow: 0 8px 16px rgba(0,0,0,0.2);
+    max-width: 350px;
+    text-align: center;
+}
+h1 {
+    color: #343a40;
+    font-size: 24px;
+    margin-bottom: 20px;
+}
+input[type="file"] {
+    padding: 10px;
+    margin-bottom: 20px;
+    border-radius: 5px;
+    border: 1px solid #ced4da;
+    font-size: 14px;
+}
+input[type="submit"] {
+    background-color: #28a745;
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 16px;
+}
+input[type="submit"]:hover {
+    background-color: #218838;
+}
+.footer {
+    margin-top: 20px;
+    font-size: 12px;
+    color: #6c757d;
+}
+</style>
+<script>
+    function showProcessingMessage() {
+        const message = document.getElementById("processingMessage");
+        message.style.display = "block";
+    }
+</script>
+{% endblock %}
+
+{% block body %}
+<div class="container">
+    <h1>Upload PDF</h1>
+    <form method="post" enctype="multipart/form-data" onsubmit="showProcessingMessage()">
+        <input type="file" name="file" required>
+        <input type="submit" value="Upload">
+    </form>
+    <p id="processingMessage" style="display:none; color:#007bff;">Processing your file, please wait...</p>
+    <div class="footer">Your file will be processed and converted to Excel.</div>
+</div>
+{% endblock %}

@@ -13,13 +13,29 @@ from PIL import Image, ImageEnhance
 from PIL import ImageFont
 
 # we need to convert the pdf to the image to feed the model
-images = convert_from_path("Sample Problem.pdf")
-# make folder to save the pages as image from the PDF for the input to the model
+
+uploads_folder = "uploads"
 image_folder = 'images'
 os.makedirs(image_folder, exist_ok=True)
+# Get the list of files in the uploads folder
+files = os.listdir(uploads_folder)
 
-for i, image in enumerate(images):
-    image.save(os.path.join(image_folder, 'page'+ str(i) +'.jpg'), 'JPEG')
+# Filter out the PDF files
+pdf_files = [file for file in files if file.endswith(".pdf")]
+
+# Check if there's any PDF file
+if len(pdf_files) > 0:
+    pdf_file = pdf_files[0]  # Take the first PDF found (if multiple, you can handle it as per your requirement)
+    pdf_path = os.path.join(uploads_folder, pdf_file)
+    
+    # Convert PDF to images
+    images = convert_from_path(pdf_path)
+
+# make folder to save the pages as image from the PDF for the input to the model
+    for i, image in enumerate(images):
+        if i>0: 
+            """skip the first 2 pages"""
+            image.save(os.path.join(image_folder, 'page'+ str(i) +'.jpg'), 'JPEG')
 
 """ 
     A function that reads the image, detect the contours using openCV library.
@@ -272,7 +288,7 @@ for profile in profile_objects:
 df = pd.DataFrame(data)
 df = df.sort_values(by="Part S.No", key=lambda x: pd.to_numeric(x, errors='coerce')).reset_index(drop=True)
 # Save the DataFrame to an Excel file
-df.to_excel("voter_data.xlsx", index=False)
+df.to_excel("exports/voter_data.xlsx", index=False)
 
 print("Data exported successfully to voter_data.xlsx")
 

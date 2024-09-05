@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block head %}
+    <style>
+        .buttons{
+            position: absolute;
+            top: 30px;
+            right: 20px;
+        }
+        .download-button {
+            
+            padding: 10px 20px;
+            background-color: #4CAF50;
+            color: white;
+            text-decoration: none;
+            border: none;
+            border-radius: 5px;
+        }
+        .download-button:hover {
+            background-color: #45a049;
+        }
+
+        .home-button {
+            padding: 10px 20px;
+            background-color: red;
+            color: white;
+            text-decoration: none;
+            border: none;
+            border-radius: 5px;
+        }
+        .home-button:hover {
+            background-color: brown;
+        }
+    </style>
+{% endblock %}
+{% block body %}
+    <h1>Excel File Contents</h1>
+    <div class="buttons">
+
+        <a href="/" class="home-button">Return to Home</a>
+    <a href="{{ url_for('export_file', filename=filename) }}" class="download-button">Download Excel</a>
+    </div>
+    {{ table_html|safe }}
+{% endblock %}
