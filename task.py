@@ -6,161 +6,39 @@ import cv2
 from paddleocr import PaddleOCR, draw_ocr
 import warnings
 import os
+import time
 warnings.filterwarnings("ignore")
 import logging
 logging.getLogger("ppocr").setLevel(logging.INFO)
 from PIL import Image, ImageEnhance
 from PIL import ImageFont
 
-# we need to convert the pdf to the image to feed the model
+import multiprocessing as mp
 
-uploads_folder = "uploads"
-image_folder = 'images'
-os.makedirs(image_folder, exist_ok=True)
-# Get the list of files in the uploads folder
-files = os.listdir(uploads_folder)
-
-# Filter out the PDF files
-pdf_files = [file for file in files if file.endswith(".pdf")]
-
-# Check if there's any PDF file
-if len(pdf_files) > 0:
-    pdf_file = pdf_files[0]  # Take the first PDF found (if multiple, you can handle it as per your requirement)
-    pdf_path = os.path.join(uploads_folder, pdf_file)
-    
-    # Convert PDF to images
-    images = convert_from_path(pdf_path)
-
-# make folder to save the pages as image from the PDF for the input to the model
-    for i, image in enumerate(images):
-        if i>0: 
-            """skip the first 2 pages"""
-            image.save(os.path.join(image_folder, 'page'+ str(i) +'.jpg'), 'JPEG')
-
-""" 
-    A function that reads the image, detect the contours using openCV library.
-    Once we detect the countours, we check if it is rectangle, if it is, then we sort them and store the
-    coordinates of the rectangles and return the coordinates.
-"""
-def func(path):
-  image = cv2.imread(path)
-  gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-  edges = cv2.Canny(gray, 50, 150)
-  contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-  rectangles = []
-  for contour in contours:
-      approx = cv2.approxPolyDP(contour, 0.04 * cv2.arcLength(contour, True), True)
-      if len(approx) == 4:
-          rectangles.append(approx)
-  rectangles.sort(key=lambda x: cv2.contourArea(x), reverse=True)
-  cropped_images = []
-  cropped_images2 = []
-  for rect in rectangles:
-    if cv2.contourArea(rect) < rectangles[1][0][0][0]:
-      break
-    else:
-      x, y, w, h = cv2.boundingRect(rect)
-      w_=w*7
-      w_//=10
-      cropped_image = image[y:y+h, x:x+w_]
-      cropped_image2 = image[y:y+h,x+w_:x+w]
-      pil_image = Image.fromarray(cropped_image)
-      enhancer = ImageEnhance.Sharpness(pil_image)
-      enhanced_image = enhancer.enhance(2.5)
-      cropped_images.append(np.array(enhanced_image))
-      cropped_images2.append(cropped_image2)
-  return cropped_images, cropped_images2
-
-# getting coordinates of the boxes to crop them, so that we can detect the text in it
-all_images1 = []
-all_images2 = []
-image_files = [f for f in os.listdir(image_folder) if f.endswith('.jpg')]
-for image_path in image_files:
-    c1, c2 = func(os.path.join("images",image_path))
-    all_images1.append(c1)
-    all_images2.append(c2)
-
-# creating to folder to annotate the image and save it
-result_images = 'result_images'
-os.makedirs(result_images, exist_ok=True)
-
-# we are using pretrained paddleOCR model to predict the model
 ocr = PaddleOCR(use_angle_cls=True, lang='en')
-messages = []
-cnt = 0
-font_path = '/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf'
-for cropped_images in all_images2:
+
+def predict(cropped_images, result_images, font_path, cnt):
+    texts = []
     for i in range(len(cropped_images)):
-        # getting the text from the model
         result = ocr.ocr(cropped_images[i], cls=True)
-        if result[0]is None:
+        if result[0] is None:
             continue
         else:
             image = Image.fromarray(cropped_images[i])
             boxes = [line[0] for line in result[0]]
             txts = [line[1][0] for line in result[0]]
             scores = [line[1][1] for line in result[0]]
-            # annotating the image with the OCR text detected
-            im_show = draw_ocr(image, boxes, txts, scores, font_path=font_path)  
+
+            # Annotating the image
+            im_show = draw_ocr(np.array(image), boxes, txts, scores, font_path=font_path)
             im_show = Image.fromarray(im_show)
-            im_show.save(os.path.join(result_images,'result' + str(cnt) + '.jpg'))
-            cnt+=1
-            # storing the texts only as we need texts only
-            messages.append(txts)
+            im_show.save(os.path.join(result_images, f'result_{cnt}.jpg'))
+            cnt += 1
 
-messages_new = []
-for i in messages:
-    messages_new.append([i[0]])
+            # Collecting texts
+            texts.append(txts)
+    return texts
 
-cntr = 0
-for cropped_images in all_images1:
-    for i in range(len(cropped_images)):
-        # getting the text from the model
-        result = ocr.ocr(cropped_images[i], cls=True)
-        if result[0] is not None:
-            image = Image.fromarray(cropped_images[i])
-            boxes = [line[0] for line in result[0]]
-            txts = [line[1][0] for line in result[0]]
-            scores = [line[1][1] for line in result[0]]
-            # annotating the image with the OCR text detected
-            im_show = draw_ocr(image, boxes, txts, scores, font_path=font_path)  
-            im_show = Image.fromarray(im_show)
-            im_show.save(os.path.join(result_images,'result' + str(cnt) + '.jpg'))
-            # storing the texts only as we need texts only
-            cnt+=1
-            messages_new[cntr]+=txts
-            cntr+=1
-messages=messages_new
-# note that the "Deleted" watermarked images contain a character E at the place of serial number, so drop them
-profiles = []
-for message in messages:
-    x = True
-    for info in message:
-        if 'E' == info or 'S'==info:
-            x = False
-            break
-    if x:
-        profiles.append([item.upper() for item in message])
-
-# We dont need the information of "Photo Available", so remove the redundancy
-
-"""
-    this class will store all the essential information corresponding to a profile.
-    Necessary informations are:
-        1. Age
-        2. Gender
-        3. Address
-        4. Name
-        5. Relative's Name
-        6. Relation type
-        7. Serial Number 
-        8. Eipc Number
-    The functions do the tasks as specified. 
-
-    Note that PaddleOCR model returns the text from top to bottom, left to right order, hence, serial number 
-    and epic numbers are the first two values in the array.
-
-"""
 class Profile:
     def __init__(self, profile_data):
         # print(profile_data)
@@ -196,7 +74,10 @@ class Profile:
                 for i in item:
                     if i.isdigit():
                         age += i
-                self.age = int(age)
+                try:
+                    self.age = int(age)
+                except:
+                    self.age = age
             pattern_gender = r"GENDER.*?(FEMALE|MALE)"
 
             match = re.search(pattern_gender, item, flags=re.IGNORECASE)
@@ -264,31 +145,129 @@ class Profile:
         }
 
 
+def func(path):
+  image = cv2.imread(path)
+  gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+  edges = cv2.Canny(gray, 50, 150)
+  contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+  rectangles = []
+  for contour in contours:
+      approx = cv2.approxPolyDP(contour, 0.04 * cv2.arcLength(contour, True), True)
+      if len(approx) == 4:
+          rectangles.append(approx)
+  rectangles.sort(key=lambda x: cv2.contourArea(x), reverse=True)
+  cropped_images = []
+  cropped_images2 = []
+  for rect in rectangles:
+    if cv2.contourArea(rect) < rectangles[1][0][0][0]:
+      break
+    else:
+      x, y, w, h = cv2.boundingRect(rect)
+      w_=w*7
+      w_//=10
+      cropped_image = image[y:y+h, x:x+w_]
+      cropped_image2 = image[y:y+h,x+w_:x+w]
+      pil_image = Image.fromarray(cropped_image)
+      enhancer = ImageEnhance.Sharpness(pil_image)
+      enhanced_image = enhancer.enhance(2.5)
+      cropped_images.append(np.array(enhanced_image))
+      cropped_images2.append(cropped_image2)
+  return cropped_images, cropped_images2
+
+def worker(cropped_images, queue, cnt_value, result_images, font_path):
+    result = predict(cropped_images, result_images, font_path, cnt_value)
+    queue.put((result, cnt_value))
 
 
-profile_objects = [Profile(data) for data in profiles]
+if __name__ == "__main__":
+    uploads_folder = "uploads"
+    image_folder = 'images'
+    result_images = 'result_images'
+    os.makedirs(result_images, exist_ok=True)
+    os.makedirs("exports", exist_ok=True)
+    font_path = '/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf'
+    os.makedirs(image_folder, exist_ok=True)
+
+    files = os.listdir(uploads_folder)
+    pdf_files = [file for file in files if file.endswith(".pdf")]
+
+    start_time = time.time()
+    if len(pdf_files) > 0:
+        pdf_file = pdf_files[0]
+        pdf_path = os.path.join(uploads_folder, pdf_file)
+
+        images = convert_from_path(pdf_path)
+        
+        messages = []
+        cnt = 0
+        for i, image in enumerate(images):
+            print(f"Iteration:{i}/{len(images)} ")
+            if i > 1:  # Skip the first 2 pages
+                iter_start_time = time.time()
+                image.save(os.path.join(image_folder, f'page_{i}.jpg'), 'JPEG')
+                c1, c2 = func(os.path.join(image_folder, f'page_{i}.jpg'))
+                # print(len(c1), len(c2))
+                queue1 = mp.Queue()
+                queue2 = mp.Queue()
+                p1 = mp.Process(target=worker, args=(c1, queue1, cnt, result_images, font_path))
+                p2 = mp.Process(target=worker, args=(c2, queue2, cnt, result_images, font_path))
+
+                p1.start()
+                p2.start()
+
+                p1.join()
+                p2.join()
+                try:
+                    # Attempt to retrieve results from multiprocessing
+                    result1, cnt1 = queue1.get(timeout=30)  # 30 seconds timeout
+                    result2, cnt2 = queue2.get(timeout=30)
+                except Exception as e:
+                    # Log the error and fall back to sequential execution
+                    # print(f"Error in multiprocessing: {e}. Executing sequentially.")
+
+                    # Sequential execution in case of multiprocessing failure
+                    result1 = predict(c1, result_images, font_path, cnt)
+                    result2 = predict(c2, result_images, font_path, cnt)
+    
+
+                # print(result2)
+                cnt += 1  
+                for index, value in enumerate(result2):
+                    messages.append([value[0]]+result1[index])
+                # print(f"Took {time.time()-iter_start_time:2f} seconds")
+                del c1,c2,result1,result2
+    # print(f"Predictions done! {time.time()-start_time} seconds")          
+    profiles = []
+    for message in messages:
+        x = True
+        for info in message:
+            if 'E' == info or 'S'==info:
+                x = False
+                break
+        if x:
+            profiles.append([item.upper() for item in message])
+    profile_objects = [Profile(data) for data in profiles]
 
 
-data = []
+    data = []
 
-for profile in profile_objects:
-    profile_info = profile.get_profile_info()
-    data.append({
-        "Part S.No": profile_info["SL No"],
-        "Voter Full Name": profile_info["Name"],
-        "Relative's Name": profile_info["Relative Name"],
-        "Relation Type": profile_info["Relation Type"],
-        "Age": profile_info["Age"],
-        "Gender": profile_info["Gender"],
-        "House No": profile_info["Address"],
-        "EPIC No": profile_info["EPIC No"]
-    })
+    for profile in profile_objects:
+        profile_info = profile.get_profile_info()
+        data.append({
+            "Part S.No": profile_info["SL No"],
+            "Voter Full Name": profile_info["Name"],
+            "Relative's Name": profile_info["Relative Name"],
+            "Relation Type": profile_info["Relation Type"],
+            "Age": profile_info["Age"],
+            "Gender": profile_info["Gender"],
+            "House No": profile_info["Address"],
+            "EPIC No": profile_info["EPIC No"]
+        })
 
-# Convert the list of dictionaries into a pandas DataFrame
-df = pd.DataFrame(data)
-df = df.sort_values(by="Part S.No", key=lambda x: pd.to_numeric(x, errors='coerce')).reset_index(drop=True)
-# Save the DataFrame to an Excel file
-df.to_excel("exports/voter_data.xlsx", index=False)
-
-print("Data exported successfully to voter_data.xlsx")
+    df = pd.DataFrame(data)
+    # print(df.head())
+    df = df.sort_values(by="Part S.No", key=lambda x: pd.to_numeric(x, errors='coerce')).reset_index(drop=True)
+    df.to_excel("exports/voter_data.xlsx", index=False)
+    print("Data exported successfully to voter_data.xlsx")
+    # print(f"Took {time.time()-start_time} seconds")          
 

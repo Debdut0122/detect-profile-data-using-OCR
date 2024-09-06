@@ -25,7 +25,7 @@ To set up the environment and install the required libraries, follow these steps
 3. Install the necessary Python packages using pip:
 
     ```bash
-    pip install pandas re pdf2image opencv-python paddlepaddle paddleocr pillow
+    pip install pandas re pdf2image opencv-python paddlepaddle paddleocr pillow flutter
     ```
 
     Alternatively, you can install all the libraries from the `requirements.txt` file if provided:
