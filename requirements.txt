@@ -215,3 +215,4 @@ werkzeug==3.0.2
 xkit==0.0.0
 yarl==1.9.3
 zipp==3.17.0
+gunicorn
