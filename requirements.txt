@@ -6,3 +6,4 @@ paddleocr
 pillow 
 flutter
 streamlit
+setuptools
