@@ -3,7 +3,7 @@ import pandas as pd
 import os
 import subprocess
 import shutil
-
+import sys
 # Configuration
 UPLOAD_FOLDER = 'uploads/'
 EXPORT_FOLDER = 'exports/'
@@ -43,7 +43,7 @@ if st.session_state.get('file_uploaded') and not st.session_state.get('file_proc
     if st.button("Process File"):
         with st.spinner("Processing..."):
             # Run task.py
-            result = subprocess.run(['python', 'task.py'])
+            result = subprocess.run([sys.executable, 'task.py'])
             st.write(os.listdir(os.getcwd()))
             if result.returncode == 0:
                 st.session_state['file_processed'] = True
