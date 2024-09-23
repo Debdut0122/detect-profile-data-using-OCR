@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block head %}
+    <style>
+        .buttons{
+            position: absolute;
+            top: 30px;
+            right: 20px;
+        }
+        .download-button {
+            
+            padding: 10px 20px;
+            background-color: #4CAF50;
+            color: white;
+            text-decoration: none;
+            border: none;
+            border-radius: 5px;
+        }
+        .download-button:hover {
+            background-color: #45a049;
+        }
+
+        .home-button {
+            padding: 10px 20px;
+            background-color: red;
+            color: white;
+            text-decoration: none;
+            border: none;
+            border-radius: 5px;
+        }
+        .home-button:hover {
+            background-color: brown;
+        }
+    </style>
+{% endblock %}
+{% block body %}
+<h2>Exported Files</h2>
+<a href="{{ url_for('download_all') }}" class="download-button">Download All Files</a>
+<br>
+<ul>
+{% for file in export_files %}
+    <li><a href="{{ url_for('view_excel', filename=file) }}">{{ file }}</a></li>
+{% endfor %}
+</ul>
+
+{% endblock %}

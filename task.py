@@ -129,7 +129,11 @@ class Profile:
 
     def extract_sl_no_and_epic_no(self):
         if len(self.profile_data) >= 2:
-            self.sl_no = self.profile_data[1]
+            try:
+                self.sl_no = int(self.profile_data[1])
+            except:
+                self.sl_no = None
+                
             self.epic_no = self.profile_data[0]
 
     def get_profile_info(self):
@@ -192,8 +196,7 @@ if __name__ == "__main__":
     pdf_files = [file for file in files if file.endswith(".pdf")]
 
     start_time = time.time()
-    if len(pdf_files) > 0:
-        pdf_file = pdf_files[0]
+    for pdf_file in pdf_files:
         pdf_path = os.path.join(uploads_folder, pdf_file)
 
         images = convert_from_path(pdf_path)
@@ -202,7 +205,7 @@ if __name__ == "__main__":
         cnt = 0
         for i, image in enumerate(images):
             print(f"Iteration:{i}/{len(images)} ")
-            if i > 1:  # Skip the first 2 pages
+            if i > 1 and i<4:  # Skip the first 2 pages
                 iter_start_time = time.time()
                 image.save(os.path.join(image_folder, f'page_{i}.jpg'), 'JPEG')
                 c1, c2 = func(os.path.join(image_folder, f'page_{i}.jpg'))
@@ -237,37 +240,37 @@ if __name__ == "__main__":
                 # print(f"Took {time.time()-iter_start_time:2f} seconds")
                 del c1,c2,result1,result2
     # print(f"Predictions done! {time.time()-start_time} seconds")          
-    profiles = []
-    for message in messages:
-        x = True
-        for info in message:
-            if 'E' == info or 'S'==info:
-                x = False
-                break
-        if x:
-            profiles.append([item.upper() for item in message])
-    profile_objects = [Profile(data) for data in profiles]
+        profiles = []
+        for message in messages:
+            x = True
+            for info in message:
+                if 'E' == info or 'S'==info:
+                    x = False
+                    break
+            if x:
+                profiles.append([item.upper() for item in message])
+        profile_objects = [Profile(data) for data in profiles]
 
 
-    data = []
+        data = []
 
-    for profile in profile_objects:
-        profile_info = profile.get_profile_info()
-        data.append({
-            "Part S.No": profile_info["SL No"],
-            "Voter Full Name": profile_info["Name"],
-            "Relative's Name": profile_info["Relative Name"],
-            "Relation Type": profile_info["Relation Type"],
-            "Age": profile_info["Age"],
-            "Gender": profile_info["Gender"],
-            "House No": profile_info["Address"],
-            "EPIC No": profile_info["EPIC No"]
-        })
+        for profile in profile_objects:
+            profile_info = profile.get_profile_info()
+            data.append({
+                "Part S.No": profile_info["SL No"],
+                "Voter Full Name": profile_info["Name"],
+                "Relative's Name": profile_info["Relative Name"],
+                "Relation Type": profile_info["Relation Type"],
+                "Age": profile_info["Age"],
+                "Gender": profile_info["Gender"],
+                "House No": profile_info["Address"],
+                "EPIC No": profile_info["EPIC No"]
+            })
 
-    df = pd.DataFrame(data)
-    # print(df.head())
-    df = df.sort_values(by="Part S.No", key=lambda x: pd.to_numeric(x, errors='coerce')).reset_index(drop=True)
-    df.to_excel("exports/voter_data.xlsx", index=False)
-    print("Data exported successfully to voter_data.xlsx")
-    # print(f"Took {time.time()-start_time} seconds")          
+        df = pd.DataFrame(data)
+        # print(df.head())
+        df = df.sort_values(by="Part S.No", key=lambda x: pd.to_numeric(x, errors='coerce')).reset_index(drop=True)
+        df.to_excel(f"exports/{pdf_file[:-4]}.xlsx", index=False)
+        print("Data exported successfully to voter_data.xlsx")
+        # print(f"Took {time.time()-start_time} seconds")          
 
